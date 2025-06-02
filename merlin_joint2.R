@@ -83,65 +83,51 @@ df_with_slope <- df %>%
     })
   ) %>%
   unnest_wider(result) %>%  # 将 result 列展开为多个新列：hcg_slope, hcg_vals, time_vals
-  dplyr::select(number, stime, hcg_slope)
+  dplyr::select(number, stime, status, hcg_slope)
 
-# 转成长格式
-df_long <- df %>%
-  pivot_longer(
-    cols = c(time1, time2, time3, time4, time5, time6, time7, time8, time9, time10),
-    names_to = "time_point",
-    values_to = "time"
-  ) %>%
-  mutate(
-    hcg = case_when(
-      time_point == "time1"  ~ HCG1,
-      time_point == "time2"  ~ HCG2,
-      time_point == "time3"  ~ HCG3,
-      time_point == "time4"  ~ HCG4,
-      time_point == "time5"  ~ HCG5,
-      time_point == "time6"  ~ HCG6,
-      time_point == "time7"  ~ HCG7,
-      time_point == "time8"  ~ HCG8,
-      time_point == "time9"  ~ HCG9,
-      time_point == "time10" ~ HCG10,
-      TRUE ~ NA_real_
-    ),
-    log_hcg = log(hcg)
-  ) %>%
-  filter(!is.na(hcg), !is.na(time)) %>%
-  dplyr::select(number, age, mtx.date, time, hcg, log_hcg, menopause_days, status, time.in.hospital) 
-
-# 计算长格式中的时间（相对于使用 mtx 的天数）
-df_long <- df_long %>%
-  mutate(
-    time_days = as.numeric(time - mtx.date)
-  )
-
-# 把长格式与斜率整合在一起
-df_merged <- df_long %>%
-  left_join(
-    df_with_slope %>% dplyr::select(number, stime, hcg_slope),
-    by = "number"
-  )
-
-df_merged <- df_merged %>%
+df_with_slope <- df_with_slope %>%
   rename(id = number) %>%
   mutate(id = as.numeric(id))
 
 # 从 tbl_df 类型转化为 data.frame
-df_merged <- as.data.frame(df_merged)
+df_with_slope <- as.data.frame(df_with_slope)
 
-# 每个 subject 的 stime 和 status 只有第一行有值（merlin 要求的数据格式）
-df_merged$stime[duplicated(df_merged$id)] <- NA
-df_merged$status[duplicated(df_merged$id)] <- NA
+df_event <- df_with_slope %>% 
+  mutate(
+    status_fail = ifelse(status == 1, 1, 0),  # 手术为事件
+    status_succ = ifelse(status == 0, 1, 0)   # 自然康复为事件
+  )
 
-df_fail <- df_merged %>%
+m_cr <- merlin(
+  model = list(
+    Surv(stime, status_fail) ~ hcg_slope + M1[id],
+    Surv(stime, status_succ) ~ hcg_slope + M1[id]
+  ),
+  timevar = c("stime", "stime"),
+  family = c("weibull", "weibull"),
+  levels = "id",
+  data = df_event
+)
+
+cif_failure <- predict(m_cr, stat = "cif", model = 1, time = 10, type = "marginal")  # 手术事件的30天发生概率
+cif_success <- predict(m_cr, stat = "cif", model = 2, time = 10, type = "marginal")  # 自然康复的30天发生概率
+
+# 合并为一个数据框
+cif_df <- data.frame(
+  cif_success = cif_success[, 1],
+  cif_failure = cif_failure[, 1]
+)
+
+# 查看前几行
+head(cif_df)
+
+df_fail <- df_with_slope %>%
   mutate(
     status_cr = ifelse(status == 1, 1, 0),  # 只有“手术”才算事件（1），其他视为删失（0）
     cause = "failure"                      # 标记这是“失败事件模型”
   )
 
-df_succ <- df_merged %>%
+df_succ <- df_with_slope %>%
   mutate(
     status_cr = ifelse(status == 0, 1, 0),  # 只有“自然康复”才算事件（1）
     cause = "success"                      # 标记这是“成功事件模型”
@@ -152,12 +138,11 @@ df_cr <- bind_rows(df_fail, df_succ)
 m_cr <- merlin(
   model = list(
     Surv(stime, status_cr)[cause == "failure"] ~ hcg_slope + M1[id],
-    Surv(stime, status_cr)[cause == "success"] ~ hcg_slope + M1[id],
-    log_hcg ~ age + time_days + menopause_days + M1[id]*1
+    Surv(stime, status_cr)[cause == "success"] ~ hcg_slope + M1[id]
   ),
-  timevar = c("stime", "stime", "time_days"),
+  timevar = c("stime", "stime"),
   levels = "id",
-  family = c("weibull", "weibull", "gaussian"),
+  family = c("weibull", "weibull"),
   data = df_cr
 )
 
@@ -181,12 +166,13 @@ summary(m2)
 # 联合模型
 m3 <- merlin(
   model = list(
-    Surv(stime, status) ~ hcg_slope + M1[id],
+    Surv(stime, status_fail) ~ hcg_slope + M1[id],
+    Surv(stime, status_succ) ~ hcg_slope + M1[id],
     log_hcg ~ age + time_days + menopause_days + M1[id] * 1
   ),
-  timevar = c("stime", "time_days"),
+  timevar = c("stime", "stime", "time_days"),
   levels = c("id"),
-  family = c("weibull", "gaussian"),
+  family = c("weibull", "weibull", "gaussian"),
   data = df_merged
 )
 summary(m3)
