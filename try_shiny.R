@@ -18,3 +18,23 @@ pmsampsize(type = "b", rsquared = 0.15,
            shrinkage = 0.9, cstatistic = 0.75)
 
 print(validation_size)
+
+# 设置参数
+Z <- 1.96        # 对应 95% CI
+SE <- 0.025      # 可接受的 AUC 标准误差
+p_event <- 0.25   # 预期结局发生率（例如 MTX 治疗失败率）
+
+# 样本量计算公式（Riley 2021 for AUC validation）
+n_total <- (Z * sqrt(2 * p_event * (1 - p_event)) / SE)^2
+n_total <- ceiling(n_total)  # 向上取整
+
+# 计算事件与非事件数
+n_event <- ceiling(n_total * p_event)
+n_nonevent <- n_total - n_event
+
+# 输出结果
+cat("✅ 最小总样本量:", n_total, "\n")
+cat("🔸 其中事件数:", n_event, "\n")
+cat("🔸 非事件数:", n_nonevent, "\n")
+
+
