@@ -191,6 +191,9 @@ m3 <- merlin(
 )
 summary(m3)
 
+predict(m3, model = 1)
+predict(m3, stat = "survival", time = 10, type = "marginal", model = 1)
+
 # 预测自然康复概率（CIF）
 # 分别预测两个结局（自然康复 vs. 手术）在 30 天时的累积发生概率
 cif_success <- predict(m3, stat = "cif", model = 2, time = 30, type = "marginal")
