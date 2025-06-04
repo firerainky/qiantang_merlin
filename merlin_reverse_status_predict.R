@@ -157,7 +157,7 @@ summary(m2)
 # 联合模型
 m3 <- merlin(
   model = list(
-    Surv(stime, status) ~ hcg_slope + M1[id],
+    Surv(stime, status) ~ hcg_slope + menopause_days + M1[id],
     log_hcg ~ age + time_days + menopause_days + M1[id] * 1
   ),
   timevar = c("stime", "time_days"),
@@ -200,3 +200,9 @@ df_predict$surv_prob <- pmap_dbl(
     pred[1]  # 返回第一个（也是唯一）结果
   }
 )
+
+library(pROC)
+
+roc_obj <- roc(response = df_predict$status, predictor = df_predict$surv_prob)
+plot(roc_obj, main = "ROC Curve for 30-day Recovery Prediction")
+auc(roc_obj)  # 返回 AUC（0.5~1之间，越高越好）
