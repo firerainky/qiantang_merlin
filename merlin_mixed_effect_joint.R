@@ -122,7 +122,8 @@ df_long <- df %>%
     log_hcg = log(hcg)
   ) %>%
   filter(!is.na(hcg), !is.na(time)) %>%
-  dplyr::select(number, age, mtx.date, time, hcg, log_hcg, menopause_days, status, time.in.hospital) 
+  #filter(!is.na(hcg), !is.na(time), !is.na(p)) %>%   # <- 多加这一项
+  dplyr::select(number, age, mtx.date, time, hcg, log_hcg, p, menopause_days, status, time.in.hospital) 
 
 # 计算长格式中的时间（相对于使用 mtx 的天数）
 df_long <- df_long %>%
@@ -145,7 +146,7 @@ df_merged <- df_merged %>%
 df_merged <- as.data.frame(df_merged)
 
 # status 0 -> 1, 1 -> 0
-df_merged$status <- 1 - df_merged$status
+# df_merged$status <- 1 - df_merged$status
 
 # 每个 subject 的 stime 和 status 只有第一行有值（merlin 要求的数据格式）
 df_merged$stime[duplicated(df_merged$id)] <- NA
@@ -163,13 +164,14 @@ mod <- merlin(
   data = df_merged                         # 包含 id、time、bio、success 等列的数据框
 )
 
-mod2 <- merlin(
+mod <- merlin(
   model = list(
     # 纵向子模型：固定效应 + 随机截距 + 随机斜率 + 两个新协变量
     log_hcg ~ time_days
-    + hcg_slope
-    + menopause_days
-    + M1[id]*1,      # 随机斜率
+      + hcg_slope
+      + menopause_days
+      + M1[id]*1,      # 随机斜率
+    # p ~ time_days + menopause_days + M1[id]*1,
     
     # 二分类子模型：当前值 + 两个新协变量
     status  ~ EV[log_hcg]

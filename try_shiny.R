@@ -37,4 +37,21 @@ cat("✅ 最小总样本量:", n_total, "\n")
 cat("🔸 其中事件数:", n_event, "\n")
 cat("🔸 非事件数:", n_nonevent, "\n")
 
+library(pmsampsize)
+
+library(pmsampsize)
+
+size_day7 <- pmsampsize(
+  type = "s",
+  nagrsquared = 0.25,   # 模型解释度
+  parameters = 13,      # 模型参数数
+  rate = 0.2,           # 假设整体事件率
+  timepoint = 7,        # 第7天预测事件
+  meanfup = 40          # 平均随访40天
+)
+
+summary(size_day7)
+
+summary(riley_size)
+
 
